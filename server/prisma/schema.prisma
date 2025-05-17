@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(uuid())
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  email          String?         @unique
+  name           String?
+  walletAddress  String?         @unique
+  clerkId        String?         @unique
+  password       String?         // Add this field
+  role           Role            @default(USER)
+  appointments   Appointment[]   @relation("UserAppointments")
+  doctor         Doctor?
+  medicalRecords MedicalRecord[] @relation("CreatedBy")
+  notifications  Notification[]
+  patient        Patient?
+  vitals         VitalSign[]
+  healthReadings HealthReading[]
+}
+
+model Patient {
+  id             String          @id @default(uuid())
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  userId         String          @unique
+  dateOfBirth    DateTime?
+  gender         String?
+  bloodType      String?
+  height         Float?
+  weight         Float?
+  allergies      String?
+  medicalHistory String?
+  appointments   Appointment[]   @relation("PatientAppointments")
+  medicalRecords MedicalRecord[]
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vitals         VitalSign[]
+  patientDoctors DoctorPatient[] @relation("PatientToDoctor") // Added relation
+}
+
+model Doctor {
+  id                  String          @id @default(uuid())
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  userId              String          @unique
+  specialization      String?
+  licenseNumber       String?         @unique
+  hospitalAffiliation String?
+  yearsOfExperience   Int?
+  education           String?
+  availability        Json?
+  appointments        Appointment[]   @relation("DoctorAppointments")
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  medicalRecords      MedicalRecord[] @relation("DoctorRecords")
+  doctorPatients      DoctorPatient[] @relation("DoctorToPatient") // Added relation
+}
+
+model MedicalRecord {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  patientId        String
+  diagnosis        String?
+  treatment        String?
+  medication       String?
+  notes            String?
+  attachments      Json?
+  doctorId         String?
+  createdById      String
+  blockchainTxHash String?
+  createdBy        User     @relation("CreatedBy", fields: [createdById], references: [id])
+  doctor           Doctor?  @relation("DoctorRecords", fields: [doctorId], references: [id])
+  patient          Patient  @relation(fields: [patientId], references: [id])
+}
+
+model VitalSign {
+  id                     String   @id @default(uuid())
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  patientId              String
+  userId                 String
+  timestamp              DateTime @default(now())
+  heartRate              Float?
+  bloodPressureSystolic  Float?
+  bloodPressureDiastolic Float?
+  temperature            Float?
+  respiratoryRate        Float?
+  oxygenSaturation       Float?
+  glucoseLevel           Float?
+  blockchainTxHash       String?
+  patient                Patient  @relation(fields: [patientId], references: [id])
+  user                   User     @relation(fields: [userId], references: [id])
+}
+
+model Appointment {
+  id            String            @id @default(uuid())
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  scheduledAt   DateTime
+  patientId     String
+  doctorId      String
+  userId        String
+  scheduledTime DateTime
+  endTime       DateTime
+  status        AppointmentStatus @default(SCHEDULED)
+  notes         String?
+  meetingLink   String?
+  doctor        Doctor            @relation("DoctorAppointments", fields: [doctorId], references: [id])
+  patient       Patient           @relation("PatientAppointments", fields: [patientId], references: [id])
+  user          User              @relation("UserAppointments", fields: [userId], references: [id])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  type      NotificationType
+  relatedId String?
+  user      User             @relation(fields: [userId], references: [id])
+}
+
+enum Role {
+  USER
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum NotificationType {
+  APPOINTMENT
+  MEDICATION_REMINDER
+  VITAL_ALERT
+  SYSTEM
+  ALERT
+  REMINDER
+  CONNECTION_REQUEST // Add this line
+}
+
+enum ReadingType {
+  HEART_RATE
+  BLOOD_OXYGEN
+  BLOOD_PRESSURE_SYSTOLIC
+  BLOOD_PRESSURE_DIASTOLIC
+  TEMPERATURE
+  GLUCOSE // Add this value
+  WEIGHT // Add this if needed
+  STEPS // Add this if needed
+  SLEEP // Add this if needed
+  ECG // Add this if needed
+}
+
+model HealthReading {
+  id               String      @id @default(uuid())
+  patientId        String
+  patient          User        @relation(fields: [patientId], references: [id])
+  type             ReadingType
+  value            Float
+  unit             String
+  timestamp        DateTime    @default(now())
+  blockchainTxHash String? // Add this field (optional)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+model DoctorPatient {
+  id               String   @id @default(uuid())
+  doctorId         String
+  patientId        String
+  status           String   @default("PENDING")
+  connectionCode   String? // Add this field
+  blockchainTxHash String? // And this field
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  doctor  Doctor  @relation("DoctorToPatient", fields: [doctorId], references: [id])
+  patient Patient @relation("PatientToDoctor", fields: [patientId], references: [id])
+
+  @@unique([doctorId, patientId])
+}
